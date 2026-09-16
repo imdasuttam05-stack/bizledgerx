@@ -2,56 +2,58 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
+
+const connectDB = require("./config/db");
+const healthRoutes = require("./routes/healthRoutes");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
+// Connect MongoDB Atlas
+connectDB();
+
+// Middleware
 app.use(
   cors({
     origin: process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-      : "*"
+      : true,
+    credentials: true
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
+// API routes
+app.use("/api/health", healthRoutes);
+
+// Root
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Business Software API is running"
+    message: "Business Software Backend API"
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "API is working",
-    database:
-      mongoose.connection.readyState === 1
-        ? "MongoDB Connected"
-        : "MongoDB Not Connected"
+// 404
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API route not found"
   });
 });
 
-const connectDatabase = async () => {
-  try {
-    if (!process.env.MONGODB_URI) {
-      console.log("MONGODB_URI is not configured yet.");
-      return;
-    }
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err);
 
-    await mongoose.connect(process.env.MONGODB_URI);
-
-    console.log("MongoDB Atlas connected");
-  } catch (error) {
-    console.error("MongoDB connection error:", error.message);
-  }
-};
-
-connectDatabase();
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error"
+  });
+});
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
